@@ -210,5 +210,5 @@ def process_bill(pdf_path: str, upload_id: str | None = None, auto_cleanup: bool
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    bill_id = process_bill("Apollo Bill.pdf")
+    bill_id = process_bill("Apollo.pdf")
     print(f"Stored bill with upload_id: {bill_id}")

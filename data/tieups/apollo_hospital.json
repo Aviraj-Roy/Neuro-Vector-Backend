@@ -1,0 +1,105 @@
+{
+  "hospital_name": "Apollo Hospital",
+  "categories": [
+    {
+      "category_name": "Medicines",
+      "items": [
+        {"item_name": "Paracetamol 500mg Tablet", "rate": 2.50, "type": "unit"},
+        {"item_name": "Amoxicillin 500mg Capsule", "rate": 8.00, "type": "unit"},
+        {"item_name": "Omeprazole 20mg Capsule", "rate": 5.00, "type": "unit"},
+        {"item_name": "Metformin 500mg Tablet", "rate": 3.50, "type": "unit"},
+        {"item_name": "Aspirin 75mg Tablet", "rate": 1.50, "type": "unit"},
+        {"item_name": "Ciprofloxacin 500mg Tablet", "rate": 12.00, "type": "unit"},
+        {"item_name": "Azithromycin 500mg Tablet", "rate": 45.00, "type": "unit"},
+        {"item_name": "Pantoprazole 40mg Tablet", "rate": 8.00, "type": "unit"},
+        {"item_name": "Ceftriaxone 1g Injection", "rate": 85.00, "type": "unit"},
+        {"item_name": "Normal Saline 500ml IV", "rate": 35.00, "type": "unit"},
+        {"item_name": "Dextrose 5% 500ml IV", "rate": 40.00, "type": "unit"},
+        {"item_name": "Insulin Human Regular 100IU", "rate": 250.00, "type": "unit"}
+      ]
+    },
+    {
+      "category_name": "Diagnostic Tests",
+      "items": [
+        {"item_name": "Complete Blood Count (CBC)", "rate": 350.00, "type": "service"},
+        {"item_name": "Blood Sugar Fasting", "rate": 80.00, "type": "service"},
+        {"item_name": "Blood Sugar PP", "rate": 80.00, "type": "service"},
+        {"item_name": "HbA1c Test", "rate": 450.00, "type": "service"},
+        {"item_name": "Liver Function Test (LFT)", "rate": 650.00, "type": "service"},
+        {"item_name": "Kidney Function Test (KFT)", "rate": 550.00, "type": "service"},
+        {"item_name": "Lipid Profile", "rate": 500.00, "type": "service"},
+        {"item_name": "Thyroid Profile (T3 T4 TSH)", "rate": 600.00, "type": "service"},
+        {"item_name": "Urine Routine Examination", "rate": 120.00, "type": "service"},
+        {"item_name": "Stool Routine Examination", "rate": 100.00, "type": "service"},
+        {"item_name": "COVID-19 RT-PCR Test", "rate": 500.00, "type": "service"},
+        {"item_name": "Dengue NS1 Antigen Test", "rate": 800.00, "type": "service"}
+      ]
+    },
+    {
+      "category_name": "Radiology",
+      "items": [
+        {"item_name": "X-Ray Chest PA View", "rate": 350.00, "type": "service"},
+        {"item_name": "X-Ray Abdomen", "rate": 400.00, "type": "service"},
+        {"item_name": "Ultrasound Abdomen Complete", "rate": 1200.00, "type": "service"},
+        {"item_name": "CT Scan Head Plain", "rate": 3500.00, "type": "service"},
+        {"item_name": "CT Scan Chest Plain", "rate": 4000.00, "type": "service"},
+        {"item_name": "CT Scan Abdomen with Contrast", "rate": 6500.00, "type": "service"},
+        {"item_name": "MRI Brain Plain", "rate": 6000.00, "type": "service"},
+        {"item_name": "MRI Spine Lumbar", "rate": 7000.00, "type": "service"},
+        {"item_name": "2D Echocardiography", "rate": 2000.00, "type": "service"},
+        {"item_name": "ECG 12 Lead", "rate": 250.00, "type": "service"}
+      ]
+    },
+    {
+      "category_name": "Consultation",
+      "items": [
+        {"item_name": "General Physician Consultation", "rate": 500.00, "type": "service"},
+        {"item_name": "Specialist Consultation", "rate": 800.00, "type": "service"},
+        {"item_name": "Super Specialist Consultation", "rate": 1200.00, "type": "service"},
+        {"item_name": "Emergency Consultation", "rate": 1000.00, "type": "service"},
+        {"item_name": "ICU Doctor Visit", "rate": 1500.00, "type": "service"},
+        {"item_name": "Physiotherapy Session", "rate": 400.00, "type": "service"}
+      ]
+    },
+    {
+      "category_name": "Hospitalization",
+      "items": [
+        {"item_name": "General Ward Bed Charges", "rate": 1500.00, "type": "unit"},
+        {"item_name": "Semi-Private Room Charges", "rate": 3000.00, "type": "unit"},
+        {"item_name": "Private Room Charges", "rate": 5000.00, "type": "unit"},
+        {"item_name": "Deluxe Room Charges", "rate": 8000.00, "type": "unit"},
+        {"item_name": "ICU Bed Charges", "rate": 12000.00, "type": "unit"},
+        {"item_name": "NICU Bed Charges", "rate": 10000.00, "type": "unit"},
+        {"item_name": "Nursing Charges Per Day", "rate": 800.00, "type": "unit"},
+        {"item_name": "Oxygen Charges Per Hour", "rate": 50.00, "type": "unit"}
+      ]
+    },
+    {
+      "category_name": "Surgical Consumables",
+      "items": [
+        {"item_name": "Surgical Gloves Pair", "rate": 25.00, "type": "unit"},
+        {"item_name": "Disposable Syringe 5ml", "rate": 8.00, "type": "unit"},
+        {"item_name": "IV Cannula 20G", "rate": 45.00, "type": "unit"},
+        {"item_name": "Surgical Mask", "rate": 10.00, "type": "unit"},
+        {"item_name": "Sterile Gauze Pack", "rate": 35.00, "type": "unit"},
+        {"item_name": "Adhesive Bandage Roll", "rate": 80.00, "type": "unit"},
+        {"item_name": "Suture Material Silk 2-0", "rate": 150.00, "type": "unit"},
+        {"item_name": "Foley Catheter 16Fr", "rate": 180.00, "type": "unit"},
+        {"item_name": "Urine Bag", "rate": 65.00, "type": "unit"}
+      ]
+    },
+    {
+      "category_name": "Packages",
+      "items": [
+        {"item_name": "Normal Delivery Package", "rate": 35000.00, "type": "bundle"},
+        {"item_name": "Cesarean Section Package", "rate": 75000.00, "type": "bundle"},
+        {"item_name": "Appendectomy Package", "rate": 45000.00, "type": "bundle"},
+        {"item_name": "Hernia Repair Package", "rate": 55000.00, "type": "bundle"},
+        {"item_name": "Cataract Surgery Package", "rate": 25000.00, "type": "bundle"},
+        {"item_name": "Knee Replacement Package", "rate": 250000.00, "type": "bundle"},
+        {"item_name": "Coronary Angiography Package", "rate": 25000.00, "type": "bundle"},
+        {"item_name": "Coronary Angioplasty Package", "rate": 150000.00, "type": "bundle"}
+      ]
+    }
+  ]
+}

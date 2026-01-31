@@ -48,7 +48,7 @@ SUSPECT_PATTERNS = [
     (r"^(RCPO|TXN|UTR|RRN|REF)[-/]?\d+", "reference_id"),
 
     # Bill/Invoice numbers: BL123456, INV-123456
-    (r"^(BL|INV|BILL)[-/]?\d{6,}$", "bill_number"),
+    (r"^[A-Z]{2,6}[-/]?\d{6,}$", "bill_number"),
 
     # Timestamps: HH:MM:SS
     (r"^\d{2}:\d{2}(:\d{2})?$", "timestamp"),
