@@ -50,8 +50,8 @@ If all tests pass ✅, you're ready to go!
 All configuration is in `.env`:
 
 ```bash
-# Embedding Model
-EMBEDDING_MODEL=bge-base-en-v1.5
+# Embedding Model (IMPORTANT: Use full Hugging Face identifier)
+EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
 EMBEDDING_DEVICE=cpu  # Change to 'cuda' for GPU
 
 # LLM Models

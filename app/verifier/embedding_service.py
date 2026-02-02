@@ -2,7 +2,7 @@
 Embedding Service for the Hospital Bill Verifier - LOCAL VERSION.
 
 Features:
-- Uses sentence-transformers with bge-base-en-v1.5 (fully local)
+- Uses sentence-transformers with BAAI/bge-base-en-v1.5 (fully local)
 - Persistent disk cache (JSON) to avoid redundant computations
 - Batched embedding generation for efficiency
 - No external API calls
@@ -13,7 +13,8 @@ Usage:
     embeddings = service.get_embeddings(["text1", "text2"])
 
 Environment Variables:
-    EMBEDDING_MODEL: Model name (default: bge-base-en-v1.5)
+    EMBEDDING_MODEL: Model name (default: BAAI/bge-base-en-v1.5)
+    EMBEDDING_DEVICE: Device to use (default: cpu)
     EMBEDDING_CACHE_PATH: Path to cache file (default: data/embedding_cache.json)
 """
 
@@ -54,6 +55,15 @@ class EmbeddingServiceError(Exception):
 
 
 # =============================================================================
+# Configuration Constants
+# =============================================================================
+
+# Default embedding model (must be valid Hugging Face identifier)
+DEFAULT_EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
+DEFAULT_EMBEDDING_DIMENSION = 768  # Dimension for BAAI/bge-base-en-v1.5
+
+
+# =============================================================================
 # Embedding Service (Local)
 # =============================================================================
 
@@ -66,6 +76,7 @@ class EmbeddingService:
     - Persistent disk cache to minimize computation
     - Automatic batching for efficiency
     - Model loaded once at startup
+    - L2-normalized embeddings for cosine similarity
     - Thread-safe operations
     """
     
@@ -84,7 +95,8 @@ class EmbeddingService:
             device: Device to run model on ('cpu', 'cuda', or None for auto)
         """
         # Configuration from env vars with defaults
-        self.model_name = model_name or os.getenv("EMBEDDING_MODEL", "bge-base-en-v1.5")
+        # IMPORTANT: Model name must be a valid Hugging Face identifier
+        self.model_name = model_name or os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
         self.device = device or os.getenv("EMBEDDING_DEVICE", "cpu")
         
         # Use persistent cache (global singleton by default)
@@ -112,29 +124,51 @@ class EmbeddingService:
             self._model_initialized = True
             
             if not SENTENCE_TRANSFORMERS_AVAILABLE:
-                logger.error("sentence-transformers package not installed. Run: pip install sentence-transformers")
+                error_msg = "sentence-transformers package not installed. Run: pip install sentence-transformers"
+                logger.error(error_msg)
                 self._available = False
-                self._last_error = "sentence-transformers package not installed"
-                return None
+                self._last_error = error_msg
+                raise RuntimeError(error_msg)
             
             try:
-                logger.info(f"Loading model '{self.model_name}' on device '{self.device}'...")
+                logger.info(f"Loading embedding model '{self.model_name}' on device '{self.device}'...")
+                logger.info(f"This may take a few moments on first run (model download)...")
+                
+                # Load model with explicit error handling
                 self._model = SentenceTransformer(self.model_name, device=self.device)
                 
-                # Get embedding dimension
+                # Validate and get embedding dimension explicitly
                 self._dimension = self._model.get_sentence_embedding_dimension()
                 
+                if self._dimension is None or self._dimension <= 0:
+                    raise RuntimeError(f"Invalid embedding dimension: {self._dimension}")
+                
                 logger.info(
-                    f"Model loaded successfully: dimension={self._dimension}"
+                    f"✅ Model loaded successfully: {self.model_name}"
                 )
+                logger.info(
+                    f"   Embedding dimension: {self._dimension}"
+                )
+                logger.info(
+                    f"   Device: {self.device}"
+                )
+                
                 self._available = True
                 self._last_error = None
                 
             except Exception as e:
-                logger.error(f"Failed to load model '{self.model_name}': {e}")
+                error_msg = (
+                    f"Failed to load embedding model '{self.model_name}': {e}\n"
+                    f"\nCommon fixes:\n"
+                    f"  1. Ensure model name is a valid Hugging Face identifier\n"
+                    f"     (e.g., 'BAAI/bge-base-en-v1.5', not 'bge-base-en-v1.5')\n"
+                    f"  2. Check internet connection for first-time download\n"
+                    f"  3. Verify sentence-transformers is installed: pip install sentence-transformers\n"
+                )
+                logger.error(error_msg)
                 self._available = False
                 self._last_error = str(e)
-                return None
+                raise RuntimeError(error_msg) from e
         
         return self._model
     
@@ -145,9 +179,10 @@ class EmbeddingService:
             # Try to initialize model to get dimension
             model = self._get_model()
             if model is None:
-                # Default dimension for bge-base-en-v1.5
-                return 768
-        return self._dimension or 768
+                # Fallback to default dimension for BAAI/bge-base-en-v1.5
+                logger.warning(f"Using default dimension {DEFAULT_EMBEDDING_DIMENSION} (model not loaded)")
+                return DEFAULT_EMBEDDING_DIMENSION
+        return self._dimension or DEFAULT_EMBEDDING_DIMENSION
     
     def _save_cache_on_exit(self):
         """Save cache to disk when service is destroyed."""
@@ -172,16 +207,26 @@ class EmbeddingService:
             return None, self._last_error or "Embedding model unavailable"
         
         try:
-            # Generate embeddings with normalization
+            # Generate embeddings with L2 normalization (required for cosine similarity + FAISS)
             embeddings = model.encode(
                 texts,
-                normalize_embeddings=True,
+                normalize_embeddings=True,  # L2 normalization for cosine similarity
                 show_progress_bar=False,
                 convert_to_numpy=True,
+                batch_size=32,  # Batch processing for efficiency
             )
             
-            # Ensure float32 dtype
+            # Ensure float32 dtype (required by FAISS)
             embeddings = embeddings.astype(np.float32)
+            
+            # Validate output shape
+            expected_shape = (len(texts), self.dimension)
+            if embeddings.shape != expected_shape:
+                error_msg = f"Unexpected embedding shape: {embeddings.shape}, expected {expected_shape}"
+                logger.error(error_msg)
+                return None, error_msg
+            
+            logger.debug(f"Generated {len(texts)} embeddings with shape {embeddings.shape}")
             
             return embeddings, None
             

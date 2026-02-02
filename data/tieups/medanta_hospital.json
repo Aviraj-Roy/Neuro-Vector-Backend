@@ -1,0 +1,540 @@
+{
+    "hospital_name": "Medanta Hospital",
+    "categories": [
+        {
+            "category_name": "Medicines",
+            "items": [
+                {
+                    "item_name": "Paracetamol 500mg Tablet",
+                    "rate": 3.50,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Amoxicillin 500mg Capsule",
+                    "rate": 12.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Omeprazole 20mg Capsule",
+                    "rate": 7.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Metformin 500mg Tablet",
+                    "rate": 5.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Aspirin 75mg Tablet",
+                    "rate": 2.50,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Ciprofloxacin 500mg Tablet",
+                    "rate": 18.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Azithromycin 500mg Tablet",
+                    "rate": 55.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Pantoprazole 40mg Tablet",
+                    "rate": 12.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Ceftriaxone 1g Injection",
+                    "rate": 110.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Normal Saline 500ml IV",
+                    "rate": 45.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Dextrose 5% 500ml IV",
+                    "rate": 50.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Insulin Human Regular 100IU",
+                    "rate": 320.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Atorvastatin 10mg Tablet",
+                    "rate": 10.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Losartan 50mg Tablet",
+                    "rate": 8.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Clopidogrel 75mg Tablet",
+                    "rate": 15.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Enoxaparin 40mg Injection",
+                    "rate": 280.00,
+                    "type": "unit"
+                }
+            ]
+        },
+        {
+            "category_name": "Diagnostic Tests",
+            "items": [
+                {
+                    "item_name": "Complete Blood Count (CBC)",
+                    "rate": 450.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Blood Sugar Fasting",
+                    "rate": 100.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Blood Sugar PP",
+                    "rate": 100.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "HbA1c Test",
+                    "rate": 550.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Liver Function Test (LFT)",
+                    "rate": 750.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Kidney Function Test (KFT)",
+                    "rate": 650.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Lipid Profile",
+                    "rate": 600.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Thyroid Profile (T3 T4 TSH)",
+                    "rate": 700.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Urine Routine Examination",
+                    "rate": 140.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Stool Routine Examination",
+                    "rate": 120.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "COVID-19 RT-PCR Test",
+                    "rate": 600.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Dengue NS1 Antigen Test",
+                    "rate": 900.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Vitamin D Test",
+                    "rate": 1400.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Vitamin B12 Test",
+                    "rate": 900.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Cardiac Enzyme Test",
+                    "rate": 1800.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Tumor Marker CA 125",
+                    "rate": 1600.00,
+                    "type": "service"
+                }
+            ]
+        },
+        {
+            "category_name": "Radiology",
+            "items": [
+                {
+                    "item_name": "X-Ray Chest PA View",
+                    "rate": 450.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "X-Ray Abdomen",
+                    "rate": 500.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Ultrasound Abdomen Complete",
+                    "rate": 1600.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "CT Scan Head Plain",
+                    "rate": 4500.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "CT Scan Chest Plain",
+                    "rate": 5000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "CT Scan Abdomen with Contrast",
+                    "rate": 7500.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "MRI Brain Plain",
+                    "rate": 7000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "MRI Spine Lumbar",
+                    "rate": 8000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "2D Echocardiography",
+                    "rate": 2500.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "ECG 12 Lead",
+                    "rate": 350.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Ultrasound Pelvis",
+                    "rate": 1400.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Mammography Both Breasts",
+                    "rate": 2800.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "PET CT Scan Whole Body",
+                    "rate": 28000.00,
+                    "type": "service"
+                }
+            ]
+        },
+        {
+            "category_name": "Consultation",
+            "items": [
+                {
+                    "item_name": "General Physician Consultation",
+                    "rate": 700.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Specialist Consultation",
+                    "rate": 1000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Super Specialist Consultation",
+                    "rate": 1600.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Emergency Consultation",
+                    "rate": 1400.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "ICU Doctor Visit",
+                    "rate": 2000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Physiotherapy Session",
+                    "rate": 600.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Dietician Consultation",
+                    "rate": 800.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Psychologist Consultation",
+                    "rate": 1200.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Cardiologist Consultation",
+                    "rate": 1400.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Neurologist Consultation",
+                    "rate": 1500.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Oncologist Consultation",
+                    "rate": 1800.00,
+                    "type": "service"
+                }
+            ]
+        },
+        {
+            "category_name": "Hospitalization",
+            "items": [
+                {
+                    "item_name": "General Ward Bed Charges",
+                    "rate": 2000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Semi-Private Room Charges",
+                    "rate": 4000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Private Room Charges",
+                    "rate": 7000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Deluxe Room Charges",
+                    "rate": 10000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "ICU Bed Charges",
+                    "rate": 16000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "NICU Bed Charges",
+                    "rate": 14000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Nursing Charges Per Day",
+                    "rate": 1000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Oxygen Charges Per Hour",
+                    "rate": 70.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Ventilator Charges Per Day",
+                    "rate": 6000.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Emergency Room Charges",
+                    "rate": 2500.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Isolation Room Charges",
+                    "rate": 8000.00,
+                    "type": "unit"
+                }
+            ]
+        },
+        {
+            "category_name": "Surgical Consumables",
+            "items": [
+                {
+                    "item_name": "Surgical Gloves Pair",
+                    "rate": 35.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Disposable Syringe 5ml",
+                    "rate": 12.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "IV Cannula 20G",
+                    "rate": 55.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Surgical Mask",
+                    "rate": 15.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Sterile Gauze Pack",
+                    "rate": 45.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Adhesive Bandage Roll",
+                    "rate": 100.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Suture Material Silk 2-0",
+                    "rate": 200.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Foley Catheter 16Fr",
+                    "rate": 220.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Urine Bag",
+                    "rate": 85.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Surgical Blade",
+                    "rate": 25.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Endotracheal Tube",
+                    "rate": 300.00,
+                    "type": "unit"
+                },
+                {
+                    "item_name": "Central Venous Catheter",
+                    "rate": 1500.00,
+                    "type": "unit"
+                }
+            ]
+        },
+        {
+            "category_name": "Packages",
+            "items": [
+                {
+                    "item_name": "Normal Delivery Package",
+                    "rate": 45000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Cesarean Section Package",
+                    "rate": 95000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Appendectomy Package",
+                    "rate": 55000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Hernia Repair Package",
+                    "rate": 65000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Cataract Surgery Package",
+                    "rate": 32000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Knee Replacement Package",
+                    "rate": 320000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Coronary Angiography Package",
+                    "rate": 32000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Coronary Angioplasty Package",
+                    "rate": 190000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Hysterectomy Package",
+                    "rate": 100000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Gallbladder Surgery Package",
+                    "rate": 75000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Hip Replacement Package",
+                    "rate": 300000.00,
+                    "type": "bundle"
+                },
+                {
+                    "item_name": "Bypass Surgery Package",
+                    "rate": 450000.00,
+                    "type": "bundle"
+                }
+            ]
+        },
+        {
+            "category_name": "Cardiology Services",
+            "items": [
+                {
+                    "item_name": "Stress Test TMT",
+                    "rate": 1800.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Holter Monitoring 24 Hours",
+                    "rate": 3500.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Cardiac CT Angiography",
+                    "rate": 12000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Pacemaker Implantation",
+                    "rate": 180000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Echocardiography Color Doppler",
+                    "rate": 3000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Cardiac MRI",
+                    "rate": 15000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "BNP Test",
+                    "rate": 2000.00,
+                    "type": "service"
+                },
+                {
+                    "item_name": "Carotid Doppler",
+                    "rate": 2500.00,
+                    "type": "service"
+                }
+            ]
+        }
+    ]
+}

@@ -8,6 +8,9 @@ import sys
 import os
 from pathlib import Path
 
+# Suppress TensorFlow warnings (non-fatal, from transitive dependencies)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
