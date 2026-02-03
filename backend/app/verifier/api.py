@@ -311,6 +311,48 @@ async def list_tieups():
 
 
 # =============================================================================
+# Synchronous Helper Functions (for use in non-async contexts)
+# =============================================================================
+
+def verify_bill_from_mongodb_sync(upload_id: str) -> Dict[str, Any]:
+    """
+    Synchronous version of verify_bill_from_mongodb for use in main.py.
+    
+    Args:
+        upload_id: The upload_id of the bill to verify
+        
+    Returns:
+        Verification result as a dictionary
+        
+    Raises:
+        ValueError: If bill not found or verification fails
+    """
+    # Fetch bill from MongoDB
+    doc = fetch_bill_from_mongodb(upload_id)
+    
+    if doc is None:
+        raise ValueError(f"Bill not found with upload_id: {upload_id}")
+    
+    # Transform to BillInput format
+    try:
+        bill_input = transform_mongodb_bill_to_input(doc)
+    except Exception as e:
+        logger.error(f"Failed to transform bill document: {e}", exc_info=True)
+        raise ValueError(f"Invalid bill document format: {str(e)}")
+    
+    # Verify
+    verifier = get_verifier()
+    
+    try:
+        result = verifier.verify_bill(bill_input)
+        # Convert Pydantic model to dict for easier consumption
+        return result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+    except Exception as e:
+        logger.error(f"Verification failed: {e}", exc_info=True)
+        raise ValueError(f"Verification failed: {str(e)}")
+
+
+# =============================================================================
 # Run with: uvicorn app.verifier.api:app --reload --port 8001
 # =============================================================================
 

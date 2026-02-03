@@ -393,6 +393,14 @@ class HeaderAggregator:
 
 
 LABEL_PATTERNS = {
+    "hospital_name": [
+        r"hospital\s*name\s*[:.]?",
+        r"hospital\s*[:.]?\s*(?=\w)",
+        r"^(?:name\s*of\s*)?hospital\s*[:.]?",
+        r"medical\s*center\s*[:.]?",
+        r"healthcare\s*[:.]?",
+        r"clinic\s*name\s*[:.]?",
+    ],
     "patient_name": [
         r"patient\s*name\s*[:.]?",
         r"patient\s*[:.]?\s*(?=\w)",  # "Patient: Mr Mohak Nandy"
@@ -428,6 +436,15 @@ NAME_FALLBACK_PATTERNS = [
     r"\b(Mr\.?|Mrs\.?|Ms\.?|Miss|Dr\.?|Shri|Smt\.?)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b",
     # "MOHAK NANDY" - all caps name (2-4 words)
     r"\b([A-Z]{2,}(?:\s+[A-Z]{2,}){1,3})\b",
+]
+
+# Fallback patterns for hospital name when label-based extraction fails
+# These match common hospital naming patterns
+HOSPITAL_FALLBACK_PATTERNS = [
+    # "Apollo Hospital" or "Fortis Healthcare"
+    r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Hospital|Healthcare|Medical\s+Center|Clinic|Institute))\b",
+    # "MAX HOSPITAL" - all caps hospital name
+    r"\b([A-Z]{3,}(?:\s+[A-Z]+)*\s+(?:HOSPITAL|HEALTHCARE|MEDICAL|CLINIC))\b",
 ]
 
 
@@ -472,6 +489,7 @@ class HeaderParser:
         self.aggregator = HeaderAggregator()
         self.bill_number_candidates: List[str] = []
         self._fallback_name_candidates: List[Tuple[str, int, float]] = []  # (name, page, confidence)
+        self._fallback_hospital_candidates: List[Tuple[str, int, float]] = []  # (hospital, page, confidence)
         self._pending_label: Optional[Tuple[str, int, float]] = None  # (field, page, confidence) for multi-line extraction
 
     def parse(self, lines: List[Dict[str, Any]], page_zones: Dict) -> Dict[str, Any]:
@@ -509,6 +527,10 @@ class HeaderParser:
         # Second pass: fallback name extraction if patient_name not found
         if not self.aggregator.is_locked("patient_name"):
             self._extract_fallback_names(lines, page_zones)
+        
+        # Third pass: fallback hospital extraction if hospital_name not found
+        if not self.aggregator.is_locked("hospital_name"):
+            self._extract_fallback_hospitals(lines, page_zones)
 
         return self._finalize()
 
@@ -683,6 +705,74 @@ class HeaderParser:
             return False
 
         return True
+    
+    def _extract_fallback_hospitals(self, lines: List[Dict[str, Any]], page_zones: Dict) -> None:
+        """Extract hospital name using fallback patterns.
+        
+        Only called if label-based extraction failed.
+        Looks for hospital names in the first few lines of the first page.
+        """
+        for line in lines:
+            text = (line.get("text") or "").strip()
+            if not text or len(text) < 5:
+                continue
+            
+            page = int(line.get("page", 0) or 0)
+            conf = float(line.get("confidence", 1.0) or 1.0)
+            
+            # Only check first page, top lines (likely header)
+            if page > 0:
+                continue
+            
+            zone = get_line_zone(line, page_zones)
+            if zone == "payment":
+                continue
+            
+            # Skip lines with amounts
+            if re.search(r"[\d,]+\.\d{2}\s*$", text):
+                continue
+            
+            # Try fallback patterns
+            for pattern in HOSPITAL_FALLBACK_PATTERNS:
+                m = re.search(pattern, text)
+                if m:
+                    hospital_name = m.group(1).strip()
+                    
+                    # Validate: must look like a real hospital name
+                    if self._is_valid_fallback_hospital(hospital_name):
+                        self._fallback_hospital_candidates.append((hospital_name, page, conf))
+                        break
+        
+        # Use best fallback candidate (prefer earlier page, higher confidence)
+        if self._fallback_hospital_candidates:
+            self._fallback_hospital_candidates.sort(key=lambda x: (x[1], -x[2]))
+            best_hospital, best_page, best_conf = self._fallback_hospital_candidates[0]
+            cand = Candidate(field="hospital_name", value=best_hospital, score=best_conf, page=best_page)
+            self.aggregator.offer(cand)
+    
+    def _is_valid_fallback_hospital(self, name: str) -> bool:
+        """Check if fallback hospital name looks valid."""
+        if not name or len(name) < 5:
+            return False
+        
+        # Reject if looks like a patient name with salutation
+        if re.match(r"^(Mr\.?|Mrs\.?|Ms\.?|Miss|Dr\.?)\s+", name):
+            return False
+        
+        # Reject common non-hospital words
+        reject_words = [
+            "patient", "doctor", "bill", "invoice", "receipt",
+            "date", "time", "total", "amount", "payment",
+        ]
+        name_lower = name.lower()
+        if any(word in name_lower for word in reject_words):
+            return False
+        
+        # Must contain hospital/healthcare/medical/clinic
+        if not re.search(r"(hospital|healthcare|medical|clinic|institute)", name_lower):
+            return False
+        
+        return True
 
     def _finalize(self) -> Dict[str, Any]:
         """Finalize and return header data."""
@@ -706,6 +796,7 @@ class HeaderParser:
                 "primary_bill_number": primary_bill_number,
                 "bill_numbers": bill_numbers,
                 "billing_date": header_locked.get("billing_date"),
+                "hospital_name": header_locked.get("hospital_name"),  # Add hospital name to header
             },
             "patient": {
                 "name": header_locked.get("patient_name") or "UNKNOWN",
@@ -1184,12 +1275,28 @@ class BillExtractor:
 
         # Build discount summary
         discount_summary = self._build_discount_summary(discounts)
+        
+        # Add "Hospital - " category at the top with hospital name from header
+        # This is required for verifier to match hospital tie-ups
+        hospital_name = header_data["header"].get("hospital_name") or "UNKNOWN"
+        hospital_category = {
+            "Hospital - ": [
+                {
+                    "item_name": hospital_name,
+                    "amount": 0,
+                    "quantity": 1,
+                    "final_amount": 0,
+                }
+            ]
+        }
+        # Merge hospital category at the top (before other categories)
+        categorized_with_hospital = {**hospital_category, **categorized}
 
         result: Dict[str, Any] = {
             "extraction_date": datetime.now().isoformat(),
             "header": header_data["header"],
             "patient": header_data["patient"],
-            "items": categorized,
+            "items": categorized_with_hospital,  # Use merged dict with hospital category
             # "payments" intentionally excluded per choice C
             "subtotals": subtotals,
             "grand_total": grand_total,
