@@ -650,9 +650,10 @@ class SemanticMatcher:
                 item=item
             )
         
-        # Use LLM for borderline cases (0.70 <= similarity < 0.85)
+        # Use LLM for borderline cases (0.65 <= similarity < 0.85)
         # Only if partial matching also failed
-        if use_llm and similarity >= CATEGORY_SIMILARITY_THRESHOLD:
+        # Use CATEGORY_SOFT_THRESHOLD (0.65) to align with category soft acceptance
+        if use_llm and similarity >= CATEGORY_SOFT_THRESHOLD:
             self._llm_calls += 1
             logger.info(
                 f"Borderline similarity ({similarity:.4f}), using LLM for verification"

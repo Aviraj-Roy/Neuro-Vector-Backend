@@ -32,48 +32,67 @@ from typing import Optional, List
 
 # Patterns to remove (inventory metadata)
 INVENTORY_REMOVAL_PATTERNS = [
-    # HS codes, SKU codes in parentheses
-    r'\(\d{6,}\)',  # (30049099), (123456789)
-    r'\[\d{6,}\]',  # [30049099]
+    # HS codes, SKU codes in parentheses (MORE AGGRESSIVE)
+    r'\(\d{4,}\)',  # (30049099), (123456789), (9018)
+    r'\[\d{4,}\]',  # [30049099]
+    r'\(HS[:\s]*\d+\)',  # (HS:90183100)
     
-    # Lot numbers and batch IDs
+    # Lot numbers and batch IDs (ENHANCED)
     r'\bLOT[\s:]*[A-Z0-9\-]+',
     r'\bBATCH[\s:]*[A-Z0-9\-]+',
     r'\bLOT\s*NO[\s:]*[A-Z0-9\-]+',
     r'\bBATCH\s*NO[\s:]*[A-Z0-9\-]+',
+    r'\bLOT\s*#[A-Z0-9\-]+',
+    r'\bBATCH\s*#[A-Z0-9\-]+',
     
-    # Expiry dates
+    # Expiry and manufacturing dates (ENHANCED)
     r'\bEXP[\s:]*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
     r'\bEXPIRY[\s:]*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
     r'\bMFG[\s:]*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+    r'\bMFD[\s:]*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+    r'\bEXP[\s:]*[A-Z]{3}[\s-]\d{2,4}',  # EXP:DEC-2025
     
-    # Brand/vendor suffixes (common patterns)
-    r'\|[A-Z]{2,4}$',  # |GTF, |ABC, |PHARMA
-    r'-\s*[A-Z]{2,4}$',  # - GTF, - ABC
+    # Brand/vendor suffixes (MORE AGGRESSIVE)
+    r'\|[A-Z]{2,}\s*$',  # |GTF, |ABC, |PHARMA, |MEDTRONIC
+    r'-\s*[A-Z]{2,}\s*$',  # - GTF, - ABC, - MEDTRONIC
+    r'\bBRAND[\s:]+[A-Z][A-Z\s]+',  # BRAND:MEDTRONIC, BRAND: XYZ
+    r'\bMFR[\s:]+[A-Z][A-Z\s]+',  # MFR:ABC
+    r'\bMANUFACTURER[\s:]+[A-Z][A-Z\s]+',
     
-    # Packaging details
+    # Packaging details (ENHANCED)
     r'\b\d+\s*X\s*\d+\s*(ML|MG|GM|L|TABS?|CAPS?)',  # 10X10ML, 5X5TABS
     r'\bSTRIP\s*OF\s*\d+',
     r'\bBOX\s*OF\s*\d+',
     r'\bPACK\s*OF\s*\d+',
+    r'\bBOTTLE\s*OF\s*\d+',
+    r'\bVIAL\s*OF\s*\d+',
+    r'\b\d+\s*STRIPS?\b',
+    r'\b\d+\s*TABS?\b',
+    r'\b\d+\s*CAPS?\b',
     
     # Serial numbers at start
     r'^\d+[\.\)]\s*',  # 1. 2) 3.
     
-    # Trailing dashes and pipes
-    r'-+$',
-    r'\|+$',
+    # Trailing dashes, pipes, and noise
+    r'-+\s*$',
+    r'\|+\s*$',
+    r'\s+-\s*$',
+    r'\s+\|\s*$',
 ]
 
 # Patterns to identify and preserve medical core
 MEDICAL_CORE_PATTERNS = [
     # Drug name + strength (most common)
     # Example: NICORANDIL 5MG, PARACETAMOL 500MG
-    r'([A-Z][A-Z\s]+?)\s*[-\s]*(\d+\.?\d*\s*(?:MG|MCG|GM|ML|IU|UNITS?))',
+    r'([A-Z][A-Z\s]+?)\s*[-\s]*(\d+\.?\d*\s*(?:MG|MCG|UG|GM|G|ML|L|IU|UNITS?))',
     
     # Drug name + form + strength
     # Example: NICORANDIL TABLET 5MG
-    r'([A-Z][A-Z\s]+?)\s+(TABLET|CAPSULE|INJECTION|SYRUP|CREAM|OINTMENT)\s*[-\s]*(\d+\.?\d*\s*(?:MG|MCG|GM|ML|IU|UNITS?))',
+    r'([A-Z][A-Z\s]+?)\s+(TABLET|CAPSULE|INJECTION|SYRUP|CREAM|OINTMENT|DROPS?)\s*[-\s]*(\d+\.?\d*\s*(?:MG|MCG|UG|GM|G|ML|L|IU|UNITS?))',
+    
+    # Implant/device with size/spec
+    # Example: STENT CORONARY 3.5MM, SUTURE 3-0
+    r'([A-Z][A-Z\s]+?)\s+(\d+[-\.\s]*\d*\s*(?:MM|CM|FR|CH|GAUGE)?)',
     
     # Procedure/test name (no strength)
     # Example: MRI BRAIN, CT SCAN, CONSULTATION
@@ -141,11 +160,12 @@ def extract_medical_core(text: str) -> str:
         medical_core = cleaned
     
     # Step 3: Additional cleaning
-    # Remove common noise words
+    # Remove common noise words (MORE COMPREHENSIVE)
     noise_words = [
-        'TABLET', 'CAPSULE', 'INJECTION', 'SYRUP', 'CREAM', 'OINTMENT',
-        'STRIP', 'BOX', 'PACK', 'BOTTLE', 'VIAL',
-        'FIRST', 'VISIT', 'FOLLOW', 'UP', 'FOLLOWUP',
+        'TABLET', 'CAPSULE', 'INJECTION', 'SYRUP', 'CREAM', 'OINTMENT', 'DROPS',
+        'STRIP', 'BOX', 'PACK', 'BOTTLE', 'VIAL', 'AMPOULE', 'SACHET',
+        'FIRST', 'VISIT', 'FOLLOW', 'UP', 'FOLLOWUP', 'SECOND', 'THIRD',
+        'BRAND', 'MFR', 'MANUFACTURER', 'COMPANY',
     ]
     
     tokens = medical_core.split()

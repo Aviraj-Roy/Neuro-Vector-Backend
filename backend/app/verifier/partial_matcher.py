@@ -125,26 +125,33 @@ def is_partial_match(
     bill_item: str,
     tieup_item: str,
     semantic_similarity: float,
-    overlap_threshold: float = 0.5,
-    containment_threshold: float = 0.7,
-    min_semantic_similarity: float = 0.70,
+    overlap_threshold: float = 0.4,  # LOWERED: More permissive for partial matches
+    containment_threshold: float = 0.6,  # LOWERED: Accept if 60% of tie-up terms in bill
+    min_semantic_similarity: float = 0.65,  # LOWERED: Align with soft category threshold
 ) -> Tuple[bool, float, str]:
     """
     Check if bill item is a partial match for tie-up item.
     
-    Strategy:
+    Strategy (REFACTORED for better medicine/implant matching):
     1. If semantic similarity >= 0.85: Auto-match (existing logic)
-    2. If semantic similarity >= 0.70:
+    2. If semantic similarity >= 0.65:
        - Calculate token overlap
        - Calculate containment (tie-up terms in bill)
-       - If overlap >= 0.5 OR containment >= 0.7: Accept match
+       - If overlap >= 0.4 OR containment >= 0.6: Accept match
     3. Otherwise: Reject
     
+    This is more permissive than before to handle medical core extraction
+    where noise has been removed but semantic similarity may still be borderline.
+    
     Examples:
+        bill: "nicorandil 5mg"  (after core extraction)
+        tieup: "nicorandil 5mg"
+        → overlap=1.0, containment=1.0
+        → MATCH ✅
+        
         bill: "consultation first visit"
         tieup: "consultation"
-        → overlap=1.0 (100% of "consultation" is in bill)
-        → containment=1.0 (all tie-up terms in bill)
+        → overlap=0.33, containment=1.0 (100% of "consultation" is in bill)
         → MATCH ✅
         
         bill: "mri brain"
@@ -158,12 +165,12 @@ def is_partial_match(
         → MATCH ✅
     
     Args:
-        bill_item: Normalized bill item text
+        bill_item: Normalized bill item text (after medical core extraction)
         tieup_item: Normalized tie-up item text
         semantic_similarity: Semantic similarity score (0.0 to 1.0)
-        overlap_threshold: Minimum token overlap ratio
-        containment_threshold: Minimum containment ratio
-        min_semantic_similarity: Minimum semantic similarity to consider
+        overlap_threshold: Minimum token overlap ratio (default 0.4)
+        containment_threshold: Minimum containment ratio (default 0.6)
+        min_semantic_similarity: Minimum semantic similarity to consider (default 0.65)
         
     Returns:
         Tuple of (is_match, confidence, reason)
