@@ -525,8 +525,13 @@ class SemanticMatcher:
         - 0.70 <= similarity < 0.85: Use LLM verification (if use_llm=True)
         - similarity < 0.70: Auto-reject (MISMATCH)
         
+        Text Normalization:
+        - Bill item text is normalized before matching to handle OCR noise
+        - Removes numbering, doctor names, separators, etc.
+        - Example: "1. CONSULTATION - FIRST VISIT | Dr. Vivek" → "consultation first visit"
+        
         Args:
-            item_name: Item name from the bill
+            item_name: Item name from the bill (will be normalized)
             hospital_name: Matched hospital name
             category_name: Matched category name
             threshold: Minimum similarity threshold (default 0.85)
@@ -537,6 +542,19 @@ class SemanticMatcher:
             If embedding fails, returns error result (never crashes)
         """
         self._total_matches += 1
+        
+        # Normalize bill item text before matching
+        from app.verifier.text_normalizer import normalize_bill_item_text
+        normalized_item_name = normalize_bill_item_text(item_name)
+        
+        # Log normalization for debugging
+        if normalized_item_name != item_name.lower().strip():
+            logger.debug(
+                f"Normalized item: '{item_name}' → '{normalized_item_name}'"
+            )
+        
+        # Use normalized text for matching
+        item_name_for_matching = normalized_item_name if normalized_item_name else item_name
         
         cat_key = (hospital_name.lower(), category_name.lower())
         
@@ -554,7 +572,7 @@ class SemanticMatcher:
         
         # Get embedding for query item (with graceful degradation)
         try:
-            query_embedding = self.embedding_service.get_embedding(item_name)
+            query_embedding = self.embedding_service.get_embedding(item_name_for_matching)
         except EmbeddingServiceUnavailable as e:
             logger.warning(f"Embedding service unavailable for item match: {e}")
             return ItemMatch(
@@ -588,7 +606,7 @@ class SemanticMatcher:
         matched_name = item_index.texts[idx]
         item = item_refs[idx]
         
-        logger.debug(f"Item match: '{item_name}' -> '{matched_name}' (sim={similarity:.4f})")
+        logger.debug(f"Item match: '{item_name_for_matching}' → '{matched_name}' (sim={similarity:.4f})")
         
         # Auto-match for high similarity
         if similarity >= threshold:
@@ -606,8 +624,9 @@ class SemanticMatcher:
                 f"Borderline similarity ({similarity:.4f}), using LLM for verification"
             )
             
+            # Use original (non-normalized) text for LLM to preserve context
             llm_result = self.llm_router.match_with_llm(
-                bill_item=item_name,
+                bill_item=item_name,  # Original text for LLM
                 tieup_item=matched_name,
                 similarity=similarity,
             )
@@ -615,7 +634,7 @@ class SemanticMatcher:
             if llm_result.is_valid and llm_result.match:
                 # LLM confirmed match
                 logger.info(
-                    f"LLM confirmed match: '{item_name}' -> '{matched_name}' "
+                    f"LLM confirmed match: '{item_name}' → '{matched_name}' "
                     f"(confidence={llm_result.confidence:.4f}, model={llm_result.model_used})"
                 )
                 return ItemMatch(
@@ -627,7 +646,7 @@ class SemanticMatcher:
             else:
                 # LLM rejected or failed
                 logger.info(
-                    f"LLM rejected match: '{item_name}' -> '{matched_name}' "
+                    f"LLM rejected match: '{item_name}' → '{matched_name}' "
                     f"(confidence={llm_result.confidence:.4f}, error={llm_result.error})"
                 )
         

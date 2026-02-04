@@ -213,8 +213,18 @@ class BillVerifier:
             hospital_similarity=hospital_match.similarity,
         )
         
-        # Step 2: Process each category
+        # Step 2: Process each category (with filtering)
+        from app.verifier.text_normalizer import should_skip_category
+        
         for bill_category in bill.categories:
+            # Skip pseudo-categories (e.g., "Hospital -" artifact)
+            if should_skip_category(bill_category.category_name):
+                logger.info(
+                    f"Skipping pseudo-category: '{bill_category.category_name}' "
+                    f"({len(bill_category.items)} items ignored)"
+                )
+                continue
+            
             category_result = self._verify_category(
                 bill_category=bill_category,
                 hospital_name=matched_hospital,
