@@ -156,6 +156,56 @@ class MongoDBClient:
         self.collection.update_one({"_id": upload_id}, update, upsert=True)
         return upload_id
 
+    def get_bill(self, bill_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a bill by its ID (upload_id or _id).
+        
+        Args:
+            bill_id: The bill identifier (stored as _id in MongoDB)
+        
+        Returns:
+            Bill document if found, None otherwise
+            
+        Raises:
+            ValueError: If bill_id is empty or invalid
+            
+        Note:
+            In this schema, _id == upload_id (see upsert_bill line 132)
+        """
+        if not bill_id or not isinstance(bill_id, str):
+            raise ValueError(f"Invalid bill_id: {bill_id}")
+        
+        try:
+            # Try direct lookup first (string _id)
+            bill_doc = self.collection.find_one({"_id": bill_id})
+            if bill_doc:
+                return bill_doc
+            
+            # Fallback: try as ObjectId (for legacy documents)
+            from bson import ObjectId
+            if ObjectId.is_valid(bill_id):
+                bill_doc = self.collection.find_one({"_id": ObjectId(bill_id)})
+                if bill_doc:
+                    return bill_doc
+            
+            # Not found
+            logger.warning(f"Bill not found with ID: {bill_id}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error fetching bill {bill_id}: {e}")
+            return None
+
+    def get_bill_by_id(self, bill_id: str) -> Optional[Dict[str, Any]]:
+        """Alias for get_bill() for backward compatibility.
+        
+        Args:
+            bill_id: The bill identifier
+            
+        Returns:
+            Bill document if found, None otherwise
+        """
+        return self.get_bill(bill_id)
+
     def get_bill_by_upload_id(self, upload_id: str) -> Optional[Dict[str, Any]]:
         return self.collection.find_one({"_id": upload_id})
 
