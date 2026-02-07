@@ -183,6 +183,77 @@ def calculate_hybrid_score(
     return final_score, breakdown
 
 
+def calculate_hybrid_score_v2(
+    bill_item: str,
+    tieup_item: str,
+    semantic_similarity: float,
+    weights: dict = None,
+) -> Tuple[float, dict]:
+    """
+    Phase-2 hybrid scoring with medical anchors.
+    
+    Enhanced matching strategy that combines:
+    - Semantic similarity (50%): Core meaning and context
+    - Token overlap (25%): Exact term matching
+    - Medical anchors (25%): Domain-specific precision
+    
+    Medical anchors include:
+    - Dosage patterns (5mg, 10ml, 500mcg)
+    - Modality keywords (MRI, CT, X-Ray)
+    - Body part keywords (brain, chest, abdomen)
+    
+    Args:
+        bill_item: Normalized bill item text
+        tieup_item: Normalized tie-up item text
+        semantic_similarity: Semantic similarity score (0.0 to 1.0)
+        weights: Optional custom weights dict
+        
+    Returns:
+        Tuple of (final_score, breakdown_dict)
+        
+    Examples:
+        >>> calculate_hybrid_score_v2("mri brain", "mri brain", 0.95)
+        (0.93, {...})  # High semantic + medical anchors
+        
+        >>> calculate_hybrid_score_v2("nicorandil 5mg", "nicorandil 5mg", 0.98)
+        (0.99, {...})  # Perfect match across all dimensions
+    """
+    if weights is None:
+        weights = {
+            "semantic": 0.50,
+            "token": 0.25,
+            "medical_anchors": 0.25,
+        }
+    
+    # Calculate all metrics
+    token_overlap = calculate_token_overlap(bill_item, tieup_item)
+    
+    # Import medical anchor scoring
+    from app.verifier.medical_anchors import calculate_medical_anchor_score
+    
+    medical_anchor_score, medical_breakdown = calculate_medical_anchor_score(
+        bill_item, tieup_item
+    )
+    
+    # Weighted combination
+    final_score = (
+        weights["semantic"] * semantic_similarity +
+        weights["token"] * token_overlap +
+        weights["medical_anchors"] * medical_anchor_score
+    )
+    
+    breakdown = {
+        "semantic": semantic_similarity,
+        "token_overlap": token_overlap,
+        "medical_anchors": medical_anchor_score,
+        "medical_breakdown": medical_breakdown,
+        "final_score": final_score,
+        "weights": weights,
+    }
+    
+    return final_score, breakdown
+
+
 def is_partial_match(
     bill_item: str,
     tieup_item: str,

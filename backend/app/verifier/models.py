@@ -28,6 +28,8 @@ class VerificationStatus(str, Enum):
     RED = "RED"           # Bill amount > allowed amount (overcharged)
     MISMATCH = "MISMATCH" # No matching item found in tie-up rates
     ALLOWED_NOT_COMPARABLE = "ALLOWED_NOT_COMPARABLE"  # Item exists but no valid price comparison
+    IGNORED_ARTIFACT = "IGNORED_ARTIFACT"  # Phase-2: OCR artifact or admin charge (ignored)
+
 
 
 class FailureReason(str, Enum):
@@ -36,6 +38,7 @@ class FailureReason(str, Enum):
     LOW_SIMILARITY = "LOW_SIMILARITY"        # Best match below threshold
     PACKAGE_ONLY = "PACKAGE_ONLY"            # Only exists as package item
     ADMIN_CHARGE = "ADMIN_CHARGE"            # Administrative/artifact item
+    CATEGORY_CONFLICT = "CATEGORY_CONFLICT"  # Item exists in different category
 
 
 # =============================================================================
