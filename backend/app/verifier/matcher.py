@@ -33,6 +33,27 @@ from app.verifier.embedding_service import (
 from app.verifier.llm_router import LLMRouter, get_llm_router
 from app.verifier.models import TieUpCategory, TieUpItem, TieUpRateSheet
 
+# V2 ENHANCEMENTS: Import new modules
+try:
+    from app.verifier.enhanced_matcher import (
+        prefilter_item,
+        validate_hard_constraints,
+        calculate_hybrid_score_v3,
+        calibrate_confidence,
+        get_category_config,
+        MatchDecision
+    )
+    from app.verifier.medical_core_extractor_v2 import extract_medical_core_v2
+    from app.verifier.failure_reasons_v2 import (
+        determine_failure_reason_v2,
+        FailureReasonV2
+    )
+    V2_AVAILABLE = True
+    logger.info("V2 matching modules loaded successfully")
+except ImportError as e:
+    V2_AVAILABLE = False
+    logger.warning(f"V2 modules not available, using V1 logic: {e}")
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,6 +107,13 @@ class ItemMatch(MatchResult):
     """Item match result with tie-up item reference."""
     item: Optional[TieUpItem] = None
     normalized_item_name: Optional[str] = None  # PHASE-1: Track normalization for diagnostics
+    
+    # V2 ENHANCEMENTS: Additional fields for explainability
+    failure_reason_v2: Optional[str] = None  # FailureReasonV2 enum value
+    failure_explanation: Optional[str] = None
+    score_breakdown: Optional[Dict] = None
+    medical_metadata: Optional[Dict] = None
+    confidence_decision: Optional[str] = None  # MatchDecision enum value
 
 
 # =============================================================================
@@ -759,6 +787,320 @@ class SemanticMatcher:
             normalized_item_name=item_name_for_matching
         )
     
+    def match_item_v2(
+        self,
+        item_name: str,
+        hospital_name: str,
+        category_name: str,
+        threshold: float = None,  # Will use category-specific threshold
+        use_llm: bool = True,
+    ) -> ItemMatch:
+        """
+        Enhanced item matching with V2 architecture (6-layer pipeline).
+        
+        Layers:
+        0. Pre-filtering (artifacts, packages)
+        1. Medical core extraction
+        2. Hard constraint validation
+        3. Semantic matching
+        4. Hybrid re-ranking
+        5. Confidence calibration
+        6. Failure reason determination
+        
+        Args:
+            item_name: Item name from bill
+            hospital_name: Hospital name
+            category_name: Category name
+            threshold: Override threshold (uses category-specific if None)
+            use_llm: Whether to use LLM for borderline cases
+            
+        Returns:
+            ItemMatch with V2 enhancements (failure reasons, score breakdown, etc.)
+        """
+        if not V2_AVAILABLE:
+            # Fallback to V1 if V2 modules not available
+            logger.debug("V2 modules not available, using V1 match_item")
+            return self.match_item(item_name, hospital_name, category_name, threshold or ITEM_SIMILARITY_THRESHOLD, use_llm)
+        
+        self._total_matches += 1
+        
+        # =====================================================================
+        # LAYER 0: Pre-Filtering
+        # =====================================================================
+        
+        should_skip, skip_reason = prefilter_item(item_name)
+        if should_skip:
+            logger.info(f"Pre-filtered: '{item_name}' (reason: {skip_reason})")
+            return ItemMatch(
+                matched_text=None,
+                similarity=0.0,
+                index=-1,
+                item=None,
+                normalized_item_name=item_name,
+                failure_reason_v2=FailureReasonV2.ADMIN_CHARGE.value if skip_reason == "ARTIFACT" else FailureReasonV2.PACKAGE_ONLY.value,
+                failure_explanation=f"Pre-filtered: {skip_reason}"
+            )
+        
+        # =====================================================================
+        # LAYER 1: Medical Core Extraction
+        # =====================================================================
+        
+        bill_result = extract_medical_core_v2(item_name)
+        logger.debug(f"Medical core: '{item_name}' → '{bill_result.core_text}'")
+        
+        # Get category-specific configuration
+        config = get_category_config(category_name)
+        category_threshold = threshold if threshold is not None else config.semantic_threshold
+        
+        # =====================================================================
+        # Get indices (same as V1)
+        # =====================================================================
+        
+        cat_key = (hospital_name.lower(), category_name.lower())
+        
+        if cat_key not in self._item_indices:
+            logger.warning(f"No item index for: {hospital_name}/{category_name}")
+            return ItemMatch(
+                matched_text=None,
+                similarity=0.0,
+                index=-1,
+                item=None,
+                normalized_item_name=bill_result.core_text,
+                failure_reason_v2=FailureReasonV2.NOT_IN_TIEUP.value,
+                failure_explanation=f"Category '{category_name}' not found in hospital tie-up"
+            )
+        
+        item_index = self._item_indices[cat_key]
+        item_refs = self._item_refs[cat_key]
+        
+        # Get embedding
+        try:
+            query_embedding = self.embedding_service.get_embedding(bill_result.core_text)
+        except Exception as e:
+            logger.error(f"Embedding error: {e}")
+            return ItemMatch(
+                matched_text=None,
+                similarity=0.0,
+                index=-1,
+                item=None,
+                normalized_item_name=bill_result.core_text,
+                error=f"Embedding error: {e}"
+            )
+        
+        # =====================================================================
+        # LAYER 3: Semantic Matching (Top-K)
+        # =====================================================================
+        
+        k = min(5, item_index.size)  # Increased from 3 to 5 for better re-ranking
+        results = item_index.search(query_embedding, k=k)
+        
+        if not results:
+            return ItemMatch(
+                matched_text=None,
+                similarity=0.0,
+                index=-1,
+                item=None,
+                normalized_item_name=bill_result.core_text,
+                failure_reason_v2=FailureReasonV2.NOT_IN_TIEUP.value,
+                failure_explanation="No candidates found in semantic search"
+            )
+        
+        # =====================================================================
+        # LAYER 2 & 4: Validate Constraints + Hybrid Re-Ranking
+        # =====================================================================
+        
+        best_candidate = None
+        best_score = 0.0
+        best_breakdown = None
+        best_tieup_result = None
+        best_item = None
+        best_idx = -1
+        
+        for idx, semantic_sim in results:
+            matched_name = item_index.texts[idx]
+            item = item_refs[idx]
+            
+            # Extract medical core from candidate
+            tieup_result = extract_medical_core_v2(matched_name)
+            
+            # LAYER 2: Validate hard constraints
+            valid, constraint_reason = validate_hard_constraints(
+                bill_metadata={
+                    'dosage': bill_result.dosage,
+                    'form': bill_result.form,
+                    'modality': bill_result.modality,
+                    'body_part': bill_result.body_part,
+                    'core_text': bill_result.core_text,
+                },
+                tieup_metadata={
+                    'dosage': tieup_result.dosage,
+                    'form': tieup_result.form,
+                    'modality': tieup_result.modality,
+                    'body_part': tieup_result.body_part,
+                    'core_text': tieup_result.core_text,
+                },
+                bill_category=category_name,
+                tieup_category=category_name,
+                config=config
+            )
+            
+            if not valid:
+                logger.debug(f"Constraint failed: '{matched_name}' - {constraint_reason}")
+                # Track first failure for reporting
+                if best_candidate is None:
+                    best_candidate = matched_name
+                    best_tieup_result = tieup_result
+                    # Determine specific failure reason
+                    if "DOSAGE_MISMATCH" in constraint_reason:
+                        failure_reason = FailureReasonV2.DOSAGE_MISMATCH.value
+                    elif "FORM_MISMATCH" in constraint_reason:
+                        failure_reason = FailureReasonV2.FORM_MISMATCH.value
+                    elif "CATEGORY_BOUNDARY" in constraint_reason:
+                        failure_reason = FailureReasonV2.WRONG_CATEGORY.value
+                    elif "MODALITY_MISMATCH" in constraint_reason:
+                        failure_reason = FailureReasonV2.MODALITY_MISMATCH.value
+                    elif "BODYPART_MISMATCH" in constraint_reason:
+                        failure_reason = FailureReasonV2.BODYPART_MISMATCH.value
+                    else:
+                        failure_reason = FailureReasonV2.LOW_SIMILARITY.value
+                    
+                    return ItemMatch(
+                        matched_text=matched_name,
+                        similarity=semantic_sim,
+                        index=-1,
+                        item=None,
+                        normalized_item_name=bill_result.core_text,
+                        failure_reason_v2=failure_reason,
+                        failure_explanation=constraint_reason
+                    )
+                continue
+            
+            # LAYER 4: Calculate hybrid score
+            final_score, breakdown = calculate_hybrid_score_v3(
+                bill_text=bill_result.core_text,
+                tieup_text=tieup_result.core_text,
+                semantic_similarity=semantic_sim,
+                bill_metadata={
+                    'dosage': bill_result.dosage,
+                    'form': bill_result.form,
+                    'modality': bill_result.modality,
+                    'body_part': bill_result.body_part,
+                },
+                tieup_metadata={
+                    'dosage': tieup_result.dosage,
+                    'form': tieup_result.form,
+                    'modality': tieup_result.modality,
+                    'body_part': tieup_result.body_part,
+                },
+                category=category_name
+            )
+            
+            logger.debug(f"Candidate '{matched_name}': semantic={semantic_sim:.3f}, hybrid={final_score:.3f}")
+            
+            # Track best candidate
+            if final_score > best_score:
+                best_score = final_score
+                best_candidate = matched_name
+                best_breakdown = breakdown
+                best_tieup_result = tieup_result
+                best_item = item
+                best_idx = idx
+        
+        # =====================================================================
+        # LAYER 5: Confidence Calibration
+        # =====================================================================
+        
+        if best_candidate:
+            decision, calibrated_confidence = calibrate_confidence(
+                best_score, category_name, best_breakdown
+            )
+            
+            logger.info(f"Best match: '{best_candidate}' (score={best_score:.3f}, decision={decision.value})")
+            
+            if decision == MatchDecision.AUTO_MATCH:
+                # Accept match
+                return ItemMatch(
+                    matched_text=best_candidate,
+                    similarity=calibrated_confidence,
+                    index=best_idx,
+                    item=best_item,
+                    normalized_item_name=bill_result.core_text,
+                    score_breakdown=best_breakdown,
+                    medical_metadata={
+                        'bill': {
+                            'dosage': bill_result.dosage,
+                            'form': bill_result.form,
+                            'modality': bill_result.modality,
+                            'body_part': bill_result.body_part,
+                        },
+                        'tieup': {
+                            'dosage': best_tieup_result.dosage,
+                            'form': best_tieup_result.form,
+                            'modality': best_tieup_result.modality,
+                            'body_part': best_tieup_result.body_part,
+                        }
+                    },
+                    confidence_decision=decision.value
+                )
+            
+            elif decision == MatchDecision.LLM_VERIFY and use_llm:
+                # Use LLM verification
+                self._llm_calls += 1
+                llm_result = self.llm_router.verify_match(
+                    bill_item=bill_result.core_text,
+                    tieup_item=best_tieup_result.core_text,
+                    similarity=best_score
+                )
+                
+                if llm_result.get('match', False):
+                    logger.info(f"LLM verified match: '{best_candidate}'")
+                    return ItemMatch(
+                        matched_text=best_candidate,
+                        similarity=calibrated_confidence,
+                        index=best_idx,
+                        item=best_item,
+                        normalized_item_name=bill_result.core_text,
+                        score_breakdown=best_breakdown,
+                        confidence_decision=decision.value
+                    )
+        
+        # =====================================================================
+        # LAYER 6: Failure Reason Determination
+        # =====================================================================
+        
+        reason, explanation = determine_failure_reason_v2(
+            item_name=item_name,
+            normalized_name=bill_result.core_text,
+            category=category_name,
+            best_candidate=best_candidate,
+            best_similarity=best_score if best_candidate else 0.0,
+            bill_metadata={
+                'dosage': bill_result.dosage,
+                'form': bill_result.form,
+                'modality': bill_result.modality,
+                'body_part': bill_result.body_part,
+            } if bill_result else None,
+            tieup_metadata={
+                'dosage': best_tieup_result.dosage if best_tieup_result else None,
+                'form': best_tieup_result.form if best_tieup_result else None,
+                'modality': best_tieup_result.modality if best_tieup_result else None,
+                'body_part': best_tieup_result.body_part if best_tieup_result else None,
+            } if best_tieup_result else None,
+            threshold=category_threshold
+        )
+        
+        return ItemMatch(
+            matched_text=best_candidate,
+            similarity=best_score if best_candidate else 0.0,
+            index=-1,
+            item=None,
+            normalized_item_name=bill_result.core_text,
+            failure_reason_v2=reason.value,
+            failure_explanation=explanation,
+            score_breakdown=best_breakdown
+        )
+    
+
     def clear_indices(self):
         """Clear all FAISS indices and references."""
         self._hospital_index = None

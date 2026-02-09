@@ -397,12 +397,13 @@ class BillVerifier:
                 )
             )
         
-        # Match item (this ALWAYS returns a result, never None)
-        item_match = self.matcher.match_item(
+        # Match item (V2: Enhanced 6-layer matching architecture)
+        # Falls back to V1 automatically if V2 modules not available
+        item_match = self.matcher.match_item_v2(
             item_name=bill_item.item_name,
             hospital_name=hospital_name,
             category_name=category_name,
-            threshold=ITEM_SIMILARITY_THRESHOLD,
+            threshold=None,  # Use category-specific threshold
         )
         
         # Check price if match found
@@ -449,16 +450,43 @@ class BillVerifier:
         - Always include diagnostics explaining why the item didn't match
         - Include best candidate if similarity > 0.5
         - Include failure reason
+        
+        V2 ENHANCEMENT:
+        - Uses V2 failure reasons when available (more specific)
+        - Includes failure explanation for better user feedback
         """
         from app.verifier.models import FailureReason, MismatchDiagnostics
         
-        # Determine failure reason
-        if item_match.similarity < 0.5:
-            failure_reason = FailureReason.NOT_IN_TIEUP
-            best_candidate = None  # Too low similarity to show candidate
+        # V2: Use enhanced failure reason if available
+        if hasattr(item_match, 'failure_reason_v2') and item_match.failure_reason_v2:
+            # Map V2 failure reason to V1 enum (for backward compatibility)
+            v2_reason = item_match.failure_reason_v2
+            if 'DOSAGE_MISMATCH' in v2_reason or 'FORM_MISMATCH' in v2_reason:
+                failure_reason = FailureReason.LOW_SIMILARITY  # Closest V1 equivalent
+            elif 'WRONG_CATEGORY' in v2_reason or 'CATEGORY' in v2_reason:
+                failure_reason = FailureReason.CATEGORY_CONFLICT
+            elif 'ADMIN' in v2_reason:
+                failure_reason = FailureReason.ADMIN_CHARGE
+            elif 'PACKAGE' in v2_reason:
+                failure_reason = FailureReason.PACKAGE_ONLY
+            elif 'NOT_IN_TIEUP' in v2_reason:
+                failure_reason = FailureReason.NOT_IN_TIEUP
+            else:
+                failure_reason = FailureReason.LOW_SIMILARITY
+            
+            best_candidate = item_match.matched_text
+            
+            # Log V2 enhanced explanation
+            if hasattr(item_match, 'failure_explanation') and item_match.failure_explanation:
+                logger.info(f"V2 Failure: {item_match.failure_explanation}")
         else:
-            failure_reason = FailureReason.LOW_SIMILARITY
-            best_candidate = item_match.matched_text  # Show best candidate
+            # V1: Determine failure reason (legacy logic)
+            if item_match.similarity < 0.5:
+                failure_reason = FailureReason.NOT_IN_TIEUP
+                best_candidate = None  # Too low similarity to show candidate
+            else:
+                failure_reason = FailureReason.LOW_SIMILARITY
+                best_candidate = item_match.matched_text  # Show best candidate
         
         # Create diagnostics
         diagnostics = MismatchDiagnostics(
