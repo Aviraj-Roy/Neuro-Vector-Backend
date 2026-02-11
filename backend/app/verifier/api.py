@@ -2,13 +2,18 @@
 FastAPI Application for Hospital Bill Verification.
 
 Endpoints:
+- POST /upload: Upload and process a PDF medical bill
 - POST /verify: Verify a bill JSON directly
 - POST /verify/{upload_id}: Verify a bill from MongoDB by upload_id
+- GET /tieups: List all available hospitals
 - POST /tieups/reload: Reload tie-up rate sheets
 - GET /health: Health check
 
 Usage:
-    uvicorn app.verifier.api:app --reload --port 8001
+    uvicorn backend.app.verifier.api:app --reload --port 8001
+    
+    Or use the startup script:
+    start_api_server.bat
 """
 
 from __future__ import annotations
@@ -18,8 +23,12 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import shutil
+import tempfile
+from pathlib import Path
 
 from app.db.mongo_client import MongoDBClient
 from app.verifier.models import BillInput, TieUpRateSheet, VerificationResponse
@@ -72,6 +81,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Add CORS middleware to allow frontend requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # =============================================================================
 # Request/Response Models
@@ -94,6 +112,17 @@ class HealthResponse(BaseModel):
     status: str
     verifier_initialized: bool
     hospitals_indexed: int
+
+
+class UploadResponse(BaseModel):
+    """Response for PDF upload and processing endpoint."""
+    success: bool
+    upload_id: str
+    hospital_name: str
+    message: str
+    page_count: Optional[int] = None
+    total_items: Optional[int] = None
+    grand_total: Optional[float] = None
 
 
 # =============================================================================
@@ -215,6 +244,101 @@ async def health_check():
         verifier_initialized=verifier._initialized,
         hospitals_indexed=hospitals_indexed,
     )
+
+
+@app.post("/upload", response_model=UploadResponse, tags=["Upload"])
+async def upload_and_process_bill(
+    file: UploadFile = File(..., description="PDF file of the medical bill"),
+    hospital_name: str = Form(..., description="Name of the hospital (e.g., 'Apollo Hospital', 'Fortis Hospital')")
+):
+    """
+    Upload a PDF bill and process it with OCR and extraction.
+    
+    This endpoint:
+    1. Accepts a PDF file upload
+    2. Processes it with OCR
+    3. Extracts structured bill data
+    4. Stores it in MongoDB
+    5. Returns the upload_id for later verification
+    
+    Args:
+        file: PDF file upload
+        hospital_name: Name of the hospital for tie-up rate matching
+        
+    Returns:
+        UploadResponse with upload_id and processing details
+    """
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files are accepted"
+        )
+    
+    # Validate hospital name
+    if not hospital_name or not hospital_name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hospital name is required"
+        )
+    
+    # Create a temporary file to store the uploaded PDF
+    temp_pdf_path = None
+    try:
+        # Save uploaded file to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            shutil.copyfileobj(file.file, temp_file)
+            temp_pdf_path = temp_file.name
+        
+        logger.info(f"Processing uploaded PDF: {file.filename} for hospital: {hospital_name}")
+        
+        # Import process_bill function
+        from app.main import process_bill
+        
+        # Process the bill
+        upload_id = process_bill(
+            pdf_path=temp_pdf_path,
+            hospital_name=hospital_name.strip()
+        )
+        
+        # Fetch the processed bill from MongoDB to get details
+        db = MongoDBClient(validate_schema=False)
+        bill_doc = db.get_bill_by_upload_id(upload_id)
+        
+        if not bill_doc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Bill was processed but could not be retrieved from database"
+            )
+        
+        # Extract summary information
+        total_items = sum(len(v) for v in bill_doc.get("items", {}).values())
+        page_count = bill_doc.get("page_count", 0)
+        grand_total = bill_doc.get("grand_total", 0.0)
+        
+        return UploadResponse(
+            success=True,
+            upload_id=upload_id,
+            hospital_name=hospital_name.strip(),
+            message=f"Bill processed successfully. Use upload_id to verify.",
+            page_count=page_count,
+            total_items=total_items,
+            grand_total=grand_total
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to process uploaded bill: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process bill: {str(e)}"
+        )
+    finally:
+        # Clean up temporary file
+        if temp_pdf_path and Path(temp_pdf_path).exists():
+            try:
+                Path(temp_pdf_path).unlink()
+            except Exception as e:
+                logger.warning(f"Failed to delete temporary file {temp_pdf_path}: {e}")
 
 
 @app.post("/verify", response_model=VerificationResponse, tags=["Verification"])
