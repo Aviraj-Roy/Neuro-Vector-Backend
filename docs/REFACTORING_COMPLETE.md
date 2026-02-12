@@ -401,7 +401,7 @@ When building the frontend:
 1. **Add Hospital Dropdown**
    ```javascript
    // Fetch available hospitals
-   GET /api/hospitals
+   GET /hospitals
    
    // Response:
    {
@@ -415,7 +415,7 @@ When building the frontend:
    const selectedHospital = "Apollo Hospital";
    
    // Upload bill with hospital
-   POST /api/upload
+   POST /upload
    {
      "file": <PDF file>,
      "hospital_name": selectedHospital
@@ -425,7 +425,7 @@ When building the frontend:
 3. **Verification Flow**
    ```javascript
    // Verify with explicit hospital
-   POST /api/verify/{upload_id}
+   POST /verify/{upload_id}
    {
      "hospital_name": selectedHospital
    }

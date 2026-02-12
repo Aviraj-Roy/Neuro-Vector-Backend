@@ -3,6 +3,7 @@ FastAPI Route Definitions for Medical Bill Verification API.
 
 This module defines all HTTP endpoints for the API:
 - POST /upload: Upload and process medical bills
+- GET /status/{upload_id}: Check upload processing status
 - POST /verify/{upload_id}: Run verification on processed bills
 - GET /tieups: List available hospital tie-ups
 - POST /tieups/reload: Reload hospital tie-up data
@@ -78,6 +79,28 @@ class VerificationResponse(BaseModel):
                     "mismatched_items": 3
                 },
                 "items": []
+            }
+        }
+
+
+class StatusResponse(BaseModel):
+    """Response model for /status/{upload_id} endpoint."""
+    upload_id: str = Field(..., description="Unique identifier for the uploaded bill")
+    status: str = Field(..., description="Current processing status")
+    exists: bool = Field(..., description="Whether the upload exists in storage")
+    message: str = Field(..., description="Human-readable status message")
+    hospital_name: Optional[str] = Field(None, description="Hospital name (if available)")
+    page_count: Optional[int] = Field(None, description="Number of pages in the uploaded PDF")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "upload_id": "a1b2c3d4e5f6g7h8i9j0",
+                "status": "completed",
+                "exists": True,
+                "message": "Bill found",
+                "hospital_name": "Apollo Hospital",
+                "page_count": 3
             }
         }
 
@@ -198,6 +221,64 @@ async def upload_bill(
                 logger.info(f"Cleaned up uploaded PDF: {pdf_path}")
         except Exception as e:
             logger.warning(f"Failed to clean up uploaded PDF: {e}")
+
+
+# ============================================================================
+# GET /status/{upload_id} - Check Processing Status
+# ============================================================================
+@router.get("/status/{upload_id}", response_model=StatusResponse, status_code=200)
+async def get_upload_status(upload_id: str):
+    """
+    Check status for an uploaded bill by upload_id.
+
+    This endpoint is compatible with frontend polling workflows that call
+    GET /status/{upload_id} after POST /upload.
+    """
+    logger.info(f"Received status request for upload_id: {upload_id}")
+
+    try:
+        from app.db.mongo_client import MongoDBClient
+
+        db = MongoDBClient(validate_schema=False)
+        bill_doc = db.get_bill(upload_id)
+
+        if not bill_doc:
+            return StatusResponse(
+                upload_id=upload_id,
+                status="not_found",
+                exists=False,
+                message="Bill not found for the provided upload_id",
+                hospital_name=None,
+                page_count=None
+            )
+
+        raw_status = str(bill_doc.get("status") or "").strip().lower()
+        status_mapping = {
+            "complete": "completed",
+            "completed": "completed",
+            "success": "completed",
+            "processing": "processing",
+            "pending": "pending",
+            "failed": "failed",
+            "error": "failed",
+        }
+        normalized_status = status_mapping.get(raw_status, raw_status or "completed")
+
+        return StatusResponse(
+            upload_id=upload_id,
+            status=normalized_status,
+            exists=True,
+            message="Bill found",
+            hospital_name=bill_doc.get("hospital_name_metadata"),
+            page_count=bill_doc.get("page_count")
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to fetch status for upload_id {upload_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch status: {str(e)}"
+        )
 
 
 # ============================================================================

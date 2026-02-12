@@ -3,6 +3,7 @@ FastAPI Application for Hospital Bill Verification.
 
 Endpoints:
 - POST /upload: Upload and process a PDF medical bill
+- GET /status/{upload_id}: Check uploaded bill processing status
 - POST /verify: Verify a bill JSON directly
 - POST /verify/{upload_id}: Verify a bill from MongoDB by upload_id
 - GET /tieups: List all available hospitals
@@ -123,6 +124,16 @@ class UploadResponse(BaseModel):
     page_count: Optional[int] = None
     total_items: Optional[int] = None
     grand_total: Optional[float] = None
+
+
+class StatusResponse(BaseModel):
+    """Response for upload status lookup endpoint."""
+    upload_id: str
+    status: str
+    exists: bool
+    message: str
+    hospital_name: Optional[str] = None
+    page_count: Optional[int] = None
 
 
 # =============================================================================
@@ -339,6 +350,57 @@ async def upload_and_process_bill(
                 Path(temp_pdf_path).unlink()
             except Exception as e:
                 logger.warning(f"Failed to delete temporary file {temp_pdf_path}: {e}")
+
+
+@app.get("/status/{upload_id}", response_model=StatusResponse, tags=["Upload"])
+async def get_upload_status(upload_id: str):
+    """
+    Check status for a processed upload by upload_id.
+
+    Returns 200 for polling compatibility even when the upload is missing.
+    """
+    try:
+        db = MongoDBClient(validate_schema=False)
+        bill_doc = db.get_bill(upload_id)
+
+        if not bill_doc:
+            return StatusResponse(
+                upload_id=upload_id,
+                status="not_found",
+                exists=False,
+                message="Bill not found for the provided upload_id",
+                hospital_name=None,
+                page_count=None,
+            )
+
+        raw_status = str(bill_doc.get("status") or "").strip().lower()
+        status_mapping = {
+            "complete": "completed",
+            "completed": "completed",
+            "success": "completed",
+            "processing": "processing",
+            "pending": "pending",
+            "failed": "failed",
+            "error": "failed",
+        }
+        normalized_status = status_mapping.get(raw_status, raw_status or "completed")
+
+        return StatusResponse(
+            upload_id=upload_id,
+            status=normalized_status,
+            exists=True,
+            message="Bill found",
+            hospital_name=bill_doc.get("hospital_name_metadata")
+            or (bill_doc.get("header", {}) or {}).get("hospital_name"),
+            page_count=bill_doc.get("page_count"),
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to fetch status for upload_id {upload_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch status: {str(e)}",
+        )
 
 
 @app.post("/verify", response_model=VerificationResponse, tags=["Verification"])
