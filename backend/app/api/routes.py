@@ -229,6 +229,7 @@ class LineItemEditInput(BaseModel):
     item_index: int = Field(..., ge=0)
     qty: Optional[float] = Field(None, ge=0)
     rate: Optional[float] = Field(None, ge=0)
+    tieup_rate: Optional[float] = Field(None, ge=0)
 
     @field_validator("category_name")
     @classmethod
@@ -240,8 +241,8 @@ class LineItemEditInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_has_any_edit(self):
-        if self.qty is None and self.rate is None:
-            raise ValueError("At least one of qty or rate must be provided")
+        if self.qty is None and self.rate is None and self.tieup_rate is None:
+            raise ValueError("At least one of qty, rate, or tieup_rate must be provided")
         return self
 
 
@@ -282,6 +283,7 @@ class BillLineItem(BaseModel):
         None,
         description="Payable amount after policy/tie-up rule",
     )
+    discrepancy: Optional[bool] = Field(None, description="True when extracted qty x rate mismatches source amount")
     extra_amount: Optional[float] = Field(None, description="Non-payable extra amount")
     decision: str = Field(..., description="Verification decision/status")
 
@@ -392,6 +394,25 @@ def _to_text_or_none(value: Any) -> Optional[str]:
     return text or None
 
 
+def _to_bool_or_none(value: Any) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y"}:
+        return True
+    if text in {"false", "0", "no", "n"}:
+        return False
+    return None
+
+
 def _extract_bill_source_items(bill_doc: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     source_items: dict[str, list[dict[str, Any]]] = {}
     for _, category_items in (bill_doc.get("items") or {}).items():
@@ -491,9 +512,28 @@ def _normalize_line_item_entry(raw_item: dict[str, Any]) -> dict[str, Any]:
         "rate": _to_number_or_none(raw_item.get("rate")),
         "billed_amount": _to_number_or_none(raw_item.get("billed_amount")),
         "amount_to_be_paid": _to_number_or_none(raw_item.get("amount_to_be_paid")),
+        "discrepancy": _to_bool_or_none(raw_item.get("discrepancy")),
         "extra_amount": _to_number_or_none(raw_item.get("extra_amount")),
         "decision": decision,
     }
+
+
+def _backfill_discrepancy_from_source_items(
+    line_items: list[dict[str, Any]], bill_doc: dict[str, Any]
+) -> list[dict[str, Any]]:
+    source_items = _extract_bill_source_items(bill_doc)
+    backfilled: list[dict[str, Any]] = []
+    for line_item in line_items:
+        if not isinstance(line_item, dict):
+            continue
+        item_name = _to_text_or_none(line_item.get("item_name") or line_item.get("bill_item"))
+        source_queue = source_items.get(item_name.casefold()) if item_name else None
+        source_item = source_queue.pop(0) if isinstance(source_queue, list) and source_queue else {}
+        normalized = dict(line_item)
+        if normalized.get("discrepancy") is None:
+            normalized["discrepancy"] = _to_bool_or_none(source_item.get("discrepancy"))
+        backfilled.append(normalized)
+    return backfilled
 
 
 def _build_line_items_from_verification(
@@ -556,6 +596,8 @@ def _build_line_items_from_verification(
                 or item.get("matched_rate")
                 or source_item.get("tieup_rate")
             )
+            if has_edit and edit_entry.get("tieup_rate") is not None:
+                tieup_rate = _to_number_or_none(edit_entry.get("tieup_rate"))
             allowed_amount = _to_number_or_none(item.get("allowed_amount"))
             if tieup_rate is None and allowed_amount is not None and qty not in (None, 0):
                 tieup_rate = round(allowed_amount / qty, 2)
@@ -585,6 +627,9 @@ def _build_line_items_from_verification(
                     "rate": rate,
                     "billed_amount": billed_amount,
                     "amount_to_be_paid": amount_to_be_paid,
+                    "discrepancy": _to_bool_or_none(
+                        item.get("discrepancy") if item.get("discrepancy") is not None else source_item.get("discrepancy")
+                    ),
                     "extra_amount": _to_number_or_none(item.get("extra_amount")),
                     "decision": (_to_text_or_none(item.get("status")) or "unknown").lower(),
                 }
@@ -1424,6 +1469,7 @@ async def get_bill_details(bill_id: str):
                 for raw_item in stored_line_items
                 if isinstance(raw_item, dict)
             ]
+            line_items = _backfill_discrepancy_from_source_items(line_items, bill_doc)
         else:
             line_items = _build_line_items_from_verification(bill_doc, verification_result)
         should_backfill_line_items = not (isinstance(stored_line_items, list) and stored_line_items) and bool(line_items)
@@ -1581,11 +1627,15 @@ async def patch_bill_line_items(upload_id: str, payload: LineItemsPatchRequest):
             current = existing_map.get(key, {})
             qty_value = entry.qty if entry.qty is not None else _to_number_or_none(current.get("qty"))
             rate_value = entry.rate if entry.rate is not None else _to_number_or_none(current.get("rate"))
+            tieup_rate_value = (
+                entry.tieup_rate if entry.tieup_rate is not None else _to_number_or_none(current.get("tieup_rate"))
+            )
             existing_map[key] = {
                 "category_name": canonical_category,
                 "item_index": entry.item_index,
                 "qty": qty_value,
                 "rate": rate_value,
+                "tieup_rate": tieup_rate_value,
                 "edited_at": edited_at,
                 "edited_by": edited_by,
             }

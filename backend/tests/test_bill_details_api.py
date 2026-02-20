@@ -547,6 +547,92 @@ def test_patch_line_items_rejects_bad_index(monkeypatch):
     assert "Invalid item_index" in resp.json()["detail"]
 
 
+def test_patch_line_items_tieup_rate_edit_recomputes_payable_and_persists(monkeypatch):
+    bill_id = "55555555555555555555555555555555"
+    doc = {
+        "_id": bill_id,
+        "upload_id": bill_id,
+        "status": "completed",
+        "verification_result_text": "Overall Summary\nTotal Items: 1",
+        "verification_format_version": "v1",
+        "verification_result": {
+            "results": [
+                {
+                    "category": "services",
+                    "items": [
+                        {
+                            "bill_item": "Consultation",
+                            "matched_item": "Consultation",
+                            "allowed_amount": 100.0,
+                            "bill_amount": 100.0,
+                            "extra_amount": 0.0,
+                            "status": "GREEN",
+                            "qty": 2,
+                            "rate": 50.0,
+                            "tieup_rate": 40.0,
+                        }
+                    ],
+                }
+            ]
+        },
+    }
+    client = _build_client(monkeypatch, doc)
+
+    patch_resp = client.patch(
+        f"/bill/{bill_id}/line-items",
+        json={
+            "line_items": [
+                {
+                    "category_name": "services",
+                    "item_index": 0,
+                    "tieup_rate": 45.0,
+                }
+            ],
+            "edited_by": "qa.user",
+        },
+    )
+    assert patch_resp.status_code == 200
+    patched_item = patch_resp.json()["line_items"][0]
+    assert patched_item["tieup_rate"] == 45.0
+    assert patched_item["amount_to_be_paid"] == 90.0
+    assert FakeMongoDBClient.shared_doc["line_item_edits"][0]["tieup_rate"] == 45.0
+
+    get_resp = client.get(f"/bill/{bill_id}")
+    assert get_resp.status_code == 200
+    item = get_resp.json()["line_items"][0]
+    assert item["tieup_rate"] == 45.0
+    assert item["amount_to_be_paid"] == 90.0
+
+
+def test_patch_line_items_accepts_tieup_rate_only_payload(monkeypatch):
+    bill_id = "66666666666666666666666666666666"
+    doc = {
+        "_id": bill_id,
+        "upload_id": bill_id,
+        "status": "completed",
+        "verification_result": {
+            "results": [
+                {
+                    "category": "diagnostics",
+                    "items": [
+                        {"bill_item": "CBC", "bill_amount": 50.0, "allowed_amount": 50.0, "status": "GREEN"}
+                    ],
+                }
+            ]
+        },
+    }
+    client = _build_client(monkeypatch, doc)
+
+    resp = client.patch(
+        f"/bill/{bill_id}/line-items",
+        json={
+            "line_items": [{"category_name": "diagnostics", "item_index": 0, "tieup_rate": 25.0}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["line_items"][0]["tieup_rate"] == 25.0
+
+
 def test_get_bill_without_edits_keeps_original_values(monkeypatch):
     bill_id = "44444444444444444444444444444444"
     doc = {
@@ -581,3 +667,160 @@ def test_get_bill_without_edits_keeps_original_values(monkeypatch):
     assert item["rate"] is None
     assert item["billed_amount"] == 80.0
     assert item["amount_to_be_paid"] == 80.0
+
+
+def test_get_bill_normalizes_stored_line_item_discrepancy_values(monkeypatch):
+    bill_id = "77777777777777777777777777777777"
+    doc = {
+        "_id": bill_id,
+        "upload_id": bill_id,
+        "status": "completed",
+        "verification_status": "completed",
+        "details_ready": True,
+        "verification_result_text": "Overall Summary\nTotal Items: 3",
+        "verification_format_version": "v1",
+        "verification_result": {"results": []},
+        "line_items": [
+            {
+                "category_name": "tests",
+                "item_index": 0,
+                "item_name": "A",
+                "decision": "green",
+                "discrepancy": True,
+            },
+            {
+                "category_name": "tests",
+                "item_index": 1,
+                "item_name": "B",
+                "decision": "green",
+                "discrepancy": "false",
+            },
+            {
+                "category_name": "tests",
+                "item_index": 2,
+                "item_name": "C",
+                "decision": "green",
+                "discrepancy": "unknown",
+            },
+        ],
+    }
+    client = _build_client(monkeypatch, doc)
+
+    resp = client.get(f"/bill/{bill_id}")
+    assert resp.status_code == 200
+    line_items = resp.json()["line_items"]
+    assert line_items[0]["discrepancy"] is True
+    assert line_items[1]["discrepancy"] is False
+    assert line_items[2]["discrepancy"] is None
+
+
+def test_get_bill_backfills_stored_line_item_discrepancy_from_source_items(monkeypatch):
+    bill_id = "88888888888888888888888888888888"
+    doc = {
+        "_id": bill_id,
+        "upload_id": bill_id,
+        "status": "completed",
+        "verification_status": "completed",
+        "details_ready": True,
+        "verification_result_text": "Overall Summary\nTotal Items: 1",
+        "verification_format_version": "v1",
+        "verification_result": {"results": []},
+        "items": {
+            "medicines": [
+                {
+                    "description": "Paracetamol",
+                    "qty": 1,
+                    "unit_rate": 10,
+                    "final_amount": 10,
+                    "discrepancy": True,
+                }
+            ]
+        },
+        "line_items": [
+            {
+                "category_name": "medicines",
+                "item_index": 0,
+                "item_name": "Paracetamol",
+                "decision": "green",
+                "discrepancy": None,
+            }
+        ],
+    }
+    client = _build_client(monkeypatch, doc)
+
+    resp = client.get(f"/bill/{bill_id}")
+    assert resp.status_code == 200
+    line_items = resp.json()["line_items"]
+    assert len(line_items) == 1
+    assert line_items[0]["discrepancy"] is True
+
+
+def test_build_line_items_discrepancy_prefers_item_value_and_keeps_false():
+    doc = {
+        "items": {
+            "tests": [
+                {
+                    "description": "CBC",
+                    "qty": 1,
+                    "unit_rate": 10,
+                    "final_amount": 10,
+                    "discrepancy": True,
+                }
+            ]
+        }
+    }
+    verification_result = {
+        "results": [
+            {
+                "category": "tests",
+                "items": [
+                    {
+                        "bill_item": "CBC",
+                        "allowed_amount": 10,
+                        "bill_amount": 10,
+                        "status": "GREEN",
+                        "discrepancy": False,
+                    }
+                ],
+            }
+        ]
+    }
+
+    line_items = _build_line_items_from_verification(doc, verification_result)
+    assert len(line_items) == 1
+    assert line_items[0]["discrepancy"] is False
+
+
+def test_build_line_items_discrepancy_falls_back_to_source_item():
+    doc = {
+        "items": {
+            "tests": [
+                {
+                    "description": "LFT",
+                    "qty": 1,
+                    "unit_rate": 20,
+                    "final_amount": 20,
+                    "discrepancy": "yes",
+                }
+            ]
+        }
+    }
+    verification_result = {
+        "results": [
+            {
+                "category": "tests",
+                "items": [
+                    {
+                        "bill_item": "LFT",
+                        "allowed_amount": 20,
+                        "bill_amount": 20,
+                        "status": "GREEN",
+                    }
+                ],
+            }
+        ]
+    }
+
+    line_items = _build_line_items_from_verification(doc, verification_result)
+    assert len(line_items) == 1
+    assert line_items[0]["discrepancy"] is True
